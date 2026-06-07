@@ -1,0 +1,26 @@
+{
+  "name": "discord-ticket-bot",
+  "version": "1.0.0",
+  "description": "Advanced Discord ticket bot with multiple ticket types and staff management",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "ticket",
+    "support"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

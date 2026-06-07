@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Transcript</title>
+<link href="https://fonts.googleapis.com/css2?family=gg+sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --dc-bg: #313338;
+    --dc-sidebar: #2B2D31;
+    --dc-header: #2B2D31;
+    --dc-msg-hover: #2E3035;
+    --dc-text: #DBDEE1;
+    --dc-text-muted: #949BA4;
+    --dc-text-link: #00A8FC;
+    --dc-accent: #5865F2;
+    --dc-green: #23A55A;
+    --dc-red: #F23F43;
+    --dc-yellow: #F0B232;
+    --dc-border: #3F4147;
+    --dc-embed-bg: #2B2D31;
+    --dc-embed-border: #1E1F22;
+    --font: 'gg sans', 'Noto Sans', Whitney, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--dc-bg);
+    color: var(--dc-text);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.375;
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--dc-header);
+    border-bottom: 1px solid var(--dc-border);
+    padding: 0 16px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 0 rgba(4,4,5,.2), 0 1.5px 0 rgba(6,6,7,.05), 0 2px 0 rgba(4,4,5,.05);
+  }
+
+  .header-hash { color: var(--dc-text-muted); font-size: 22px; font-weight: 700; }
+  .header-channel { font-size: 16px; font-weight: 700; color: var(--dc-text); }
+  .header-divider { width: 1px; height: 24px; background: var(--dc-border); margin: 0 8px; }
+  .header-meta { font-size: 14px; color: var(--dc-text-muted); }
+  .header-badge {
+    margin-left: auto;
+    background: #ED4245;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    letter-spacing: .3px;
+  }
+
+  .messages-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px 0 40px;
+  }
+
+  .system-msg {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 48px;
+    color: var(--dc-text-muted);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .system-msg::before, .system-msg::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--dc-border);
+  }
+
+  .msg-group {
+    padding: 2px 48px;
+    position: relative;
+    display: flex;
+    gap: 16px;
+    transition: background .05s;
+  }
+  .msg-group:hover { background: var(--dc-msg-hover); }
+  .msg-group.first-in-group { margin-top: 17px; padding-top: 2px; }
+
+  .avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    position: relative;
+    top: 2px;
+  }
+
+  .msg-group.compact .msg-body { padding-left: 56px; }
+
+  .compact-timestamp {
+    display: none;
+    position: absolute;
+    left: 0;
+    width: 56px;
+    text-align: right;
+    padding-right: 8px;
+    font-size: 11px;
+    color: var(--dc-text-muted);
+    line-height: 22px;
+  }
+  .msg-group.compact:hover .compact-timestamp { display: block; }
+
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+
+  .username {
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    line-height: 22px;
+  }
+  .username:hover { text-decoration: underline; }
+
+  .bot-tag {
+    background: var(--dc-accent);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 4px;
+    letter-spacing: .3px;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+
+  .timestamp { font-size: 12px; color: var(--dc-text-muted); font-weight: 400; line-height: 22px; }
+
+  .msg-content {
+    color: var(--dc-text);
+    font-size: 16px;
+    line-height: 1.375;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .msg-content a { color: var(--dc-text-link); text-decoration: none; }
+  .msg-content a:hover { text-decoration: underline; }
+
+  .mention {
+    background: rgba(88,101,242,.3);
+    color: #c9cdfb;
+    border-radius: 3px;
+    padding: 0 2px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .embed {
+    display: flex;
+    margin-top: 4px;
+    max-width: 520px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--dc-embed-bg);
+  }
+  .embed-side { width: 4px; flex-shrink: 0; border-radius: 4px 0 0 4px; }
+  .embed-content { padding: 8px 16px 16px 12px; flex: 1; }
+  .embed-title { font-size: 16px; font-weight: 700; color: white; margin-bottom: 8px; }
+  .embed-description { font-size: 14px; color: var(--dc-text); margin-bottom: 8px; white-space: pre-wrap; }
+  .embed-field { margin-top: 8px; }
+  .embed-field-name { font-size: 14px; font-weight: 700; color: var(--dc-text); margin-bottom: 2px; }
+  .embed-field-value { font-size: 14px; color: var(--dc-text-muted); }
+  .embed-footer { margin-top: 8px; font-size: 12px; color: var(--dc-text-muted); }
+
+  .ticket-info-box {
+    background: var(--dc-sidebar);
+    border: 1px solid var(--dc-border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 48px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .info-item label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--dc-text-muted);
+    margin-bottom: 2px;
+  }
+  .info-item span { font-size: 14px; color: var(--dc-text); font-weight: 500; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .status-dot.closed { background: var(--dc-red); }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 16px;
+    color: var(--dc-text-muted);
+  }
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--dc-border);
+    border-top-color: var(--dc-accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-box {
+    background: rgba(242,63,67,.1);
+    border: 1px solid rgba(242,63,67,.3);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 40px auto;
+    max-width: 500px;
+    text-align: center;
+    color: #F23F43;
+  }
+
+  @media (max-width: 600px) {
+    .msg-group { padding-left: 16px; padding-right: 16px; }
+    .msg-group.compact .msg-body { padding-left: 36px; }
+    .system-msg { padding: 4px 16px; }
+    .ticket-info-box { margin: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="loading">
+    <div class="loading-spinner"></div>
+    <span>Loading transcript…</span>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────
+//  Utility helpers
+// ──────────────────────────────────────────
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function colorForUser(str) {
+  const palette = ['#F27272','#F2A672','#F2C472','#72C4F2','#7272F2','#A872F2','#72F2A8','#72F2D6'];
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
+
+function avatarInitials(name) {
+  return name?.charAt(0)?.toUpperCase() ?? '?';
+}
+
+function formatTime(ts) {
+  const d = typeof ts === 'number' ? new Date(ts) : new Date(ts);
+  return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+}
+
+function formatFull(ts) {
+  const d = typeof ts === 'number' ? new Date(ts) : new Date(ts);
+  return d.toLocaleString([], { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function processMentions(text) {
+  return escHtml(text)
+    .replace(/@(\w+)/g, '<span class="mention">@$1</span>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+}
+
+function embedSideColor(color) {
+  if (!color) return '#5865F2';
+  if (typeof color === 'number') return '#' + color.toString(16).padStart(6,'0');
+  return color;
+}
+
+// ──────────────────────────────────────────
+//  Render
+// ──────────────────────────────────────────
+function renderEmbed(embed) {
+  const borderColor = embedSideColor(embed.color);
+  let html = `<div class="embed">
+    <div class="embed-side" style="background:${borderColor}"></div>
+    <div class="embed-content">`;
+  if (embed.title) html += `<div class="embed-title">${escHtml(embed.title)}</div>`;
+  if (embed.description) html += `<div class="embed-description">${processMentions(embed.description)}</div>`;
+  if (embed.fields?.length) {
+    embed.fields.forEach(f => {
+      html += `<div class="embed-field">
+        <div class="embed-field-name">${escHtml(f.name)}</div>
+        <div class="embed-field-value">${processMentions(f.value)}</div>
+      </div>`;
+    });
+  }
+  if (embed.footer?.text) html += `<div class="embed-footer">${escHtml(embed.footer.text)}</div>`;
+  html += `</div></div>`;
+  return html;
+}
+
+function renderMessages(messages) {
+  let html = '';
+  let lastAuthorId = null;
+  let lastTimestamp = null;
+
+  messages.forEach((msg) => {
+    const isBot = msg.bot || msg.author?.bot;
+    const authorId = msg.author?.id ?? msg.authorId ?? 'unknown';
+    const authorName = msg.author?.username ?? msg.authorName ?? 'Unknown';
+    const ts = msg.createdTimestamp ?? msg.timestamp ?? Date.now();
+    const color = isBot ? '#5865F2' : colorForUser(authorId);
+
+    const sameAuthor = authorId === lastAuthorId;
+    const closeTime = lastTimestamp && (new Date(ts) - new Date(lastTimestamp)) < 7 * 60 * 1000;
+    const isCompact = sameAuthor && closeTime;
+
+    if (isCompact) {
+      html += `<div class="msg-group compact">
+        <span class="compact-timestamp">${formatTime(ts)}</span>
+        <div class="msg-body">`;
+    } else {
+      html += `<div class="msg-group first-in-group">
+        <div class="avatar-placeholder" style="background:${color}">${avatarInitials(authorName)}</div>
+        <div class="msg-body">
+          <div class="msg-header">
+            <span class="username" style="color:${color}">${escHtml(authorName)}</span>
+            ${isBot ? '<span class="bot-tag">BOT</span>' : ''}
+            <span class="timestamp">${formatFull(ts)}</span>
+          </div>`;
+    }
+
+    if (msg.content) html += `<div class="msg-content">${processMentions(msg.content)}</div>`;
+    if (msg.embeds?.length) msg.embeds.forEach(e => { html += renderEmbed(e); });
+
+    html += `</div></div>`;
+    lastAuthorId = authorId;
+    lastTimestamp = ts;
+  });
+
+  return html;
+}
+
+function renderTicketInfo(data) {
+  const opened = data.createdAt ? formatFull(data.createdAt) : 'Unknown';
+  const closed  = data.closedAt  ? formatFull(data.closedAt)  : formatFull(new Date().toISOString());
+  const type    = data.type ? data.type.charAt(0).toUpperCase() + data.type.slice(1) : 'General';
+  const opener  = data.openerName  ?? data.opener    ?? 'Unknown';
+  const claimed = data.claimedByName ?? data.claimedBy ?? 'Unclaimed';
+
+  return `<div class="ticket-info-box">
+    <div class="info-item"><label>Ticket</label><span>#${data.ticketNumber ?? '?'} — ${escHtml(type)}</span></div>
+    <div class="info-item"><label>Opened by</label><span>${escHtml(opener)}</span></div>
+    <div class="info-item"><label>Claimed by</label><span>${escHtml(claimed)}</span></div>
+    <div class="info-item"><label>Opened</label><span>${opened}</span></div>
+    <div class="info-item"><label>Closed</label><span><span class="status-dot closed"></span>${closed}</span></div>
+    <div class="info-item"><label>Messages</label><span>${data.messages?.length ?? 0}</span></div>
+  </div>`;
+}
+
+function renderPage(data) {
+  const channelName = data.channelName ?? `ticket-${data.ticketNumber ?? '?'}`;
+  document.title = `Transcript — #${channelName}`;
+
+  document.getElementById('app').innerHTML = `
+    <div class="header">
+      <span class="header-hash">#</span>
+      <span class="header-channel">${escHtml(channelName)}</span>
+      <div class="header-divider"></div>
+      <span class="header-meta">Transcript · ${data.messages?.length ?? 0} messages</span>
+      <span class="header-badge">CLOSED</span>
+    </div>
+    <div class="messages-container">
+      ${renderTicketInfo(data)}
+      <div class="system-msg">Ticket opened</div>
+      ${renderMessages(data.messages ?? [])}
+      <div class="system-msg">Ticket closed</div>
+    </div>
+  `;
+}
+
+function showError(msg) {
+  document.getElementById('app').innerHTML = `
+    <div class="loading">
+      <div class="error-box">
+        <strong>Failed to load transcript</strong><br><br>
+        ${escHtml(msg)}<br><br>
+        <small>Make sure you used the full link from Discord.</small>
+      </div>
+    </div>`;
+}
+
+// ──────────────────────────────────────────
+//  Bootstrap
+//  Priority:
+//    1. ?url=   → fetch from remote (jsonbin.io etc.)
+//    2. #hash   → base64 encoded JSON (legacy)
+// ──────────────────────────────────────────
+(async function bootstrap() {
+  try {
+    // 1. ?url= parametresi var mı?
+    const params = new URLSearchParams(location.search);
+    const remoteUrl = params.get('url');
+
+    if (remoteUrl) {
+      const res = await fetch(remoteUrl);
+      if (!res.ok) throw new Error(`Remote fetch failed: ${res.status} ${res.statusText}`);
+
+      const json = await res.json();
+
+      // jsonbin.io yanıtı { record: {...}, metadata: {...} } şeklinde gelir
+      // Eğer doğrudan transcript objesi ise (record anahtarı yoksa) direkt kullan
+      const data = json.record ?? json;
+
+      renderPage(data);
+      return;
+    }
+
+    // 2. Eski #hash sistemi (geriye dönük uyumluluk)
+    const hash = location.hash.slice(1);
+    if (!hash) throw new Error('No transcript URL or data provided.');
+
+    let jsonStr;
+    try {
+      jsonStr = decodeURIComponent(atob(hash));
+    } catch {
+      jsonStr = decodeURIComponent(hash);
+    }
+
+    renderPage(JSON.parse(jsonStr));
+
+  } catch (err) {
+    showError(err.message);
+  }
+})();
+</script>
+</body>
+</html>
