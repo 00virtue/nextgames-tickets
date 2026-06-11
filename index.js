@@ -23,6 +23,7 @@ const config = {
     manageRoleId: process.env.MANAGE_ROLE_ID || '1373074241737719950',
     transcriptChannelId: process.env.TRANSCRIPT_CHANNEL_ID || '1512906260394152117',
     transcriptBaseUrl: process.env.TRANSCRIPT_BASE_URL || 'https://00virtue.github.io/transcript-viewer',
+    staffRoleId: process.env.STAFF_ROLE_ID || '1509407373473878107',
     // .env'e STATS_BOARD_CHANNEL_ID ekle
     statsBoardChannelId: process.env.STATS_BOARD_CHANNEL_ID || ''
 };
@@ -279,18 +280,23 @@ async function sendSupportMessage() {
 }
 
 client.on('interactionCreate', async (interaction) => {
-    if (interaction.isModalSubmit()) {
-        if (interaction.customId.startsWith('ticket_modal_')) await handleTicketModalSubmit(interaction);
-        return;
-    }
-    if (!interaction.isButton()) return;
+    try {
+        if (interaction.isModalSubmit()) {
+            if (interaction.customId.startsWith('ticket_modal_')) await handleTicketModalSubmit(interaction);
+            return;
+        }
+        if (!interaction.isButton()) return;
 
-    if (['match_issue', 'payment_issue', 'ban_appeal', 'other'].includes(interaction.customId)) {
-        await handleTicketCreation(interaction);
-    } else if (interaction.customId === 'confirm_response')          { await confirmResponse(interaction); }
-      else if (interaction.customId === 'cancel_response')            { await cancelResponse(interaction); }
-      else if (interaction.customId === 'confirm_ticket_conversion')  { await confirmTicketConversion(interaction); }
-      else if (interaction.customId === 'cancel_ticket_conversion')   { await cancelTicketConversion(interaction); }
+        if (['match_issue', 'payment_issue', 'ban_appeal', 'other'].includes(interaction.customId)) {
+            await handleTicketCreation(interaction);
+        } else if (interaction.customId === 'confirm_response')         { await confirmResponse(interaction); }
+          else if (interaction.customId === 'cancel_response')           { await cancelResponse(interaction); }
+          else if (interaction.customId === 'confirm_ticket_conversion') { await confirmTicketConversion(interaction); }
+          else if (interaction.customId === 'cancel_ticket_conversion')  { await cancelTicketConversion(interaction); }
+    } catch (err) {
+        if (err.code === 10062) return; // Unknown interaction — bot restart sonrası, ignore et
+        console.error('[Interaction Error]', err);
+    }
 });
 
 async function handleTicketCreation(interaction) {
@@ -353,12 +359,13 @@ async function createTicketChannel(user, ticketType, answers) {
         name: `ticket-${ticketNumber}`,
         type: ChannelType.GuildText,
         parent: config.unclaimedCategoryId,
-        permissionOverwrites: [
-            { id: guild.roles.everyone,              deny:  [PermissionFlagsBits.ViewChannel] },
-            { id: config.ticketNotificationsRoleId,  allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-            { id: config.adminRoleId,                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-            { id: config.manageRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
-        ]
+permissionOverwrites: [
+    { id: guild.roles.everyone,             deny:  [PermissionFlagsBits.ViewChannel] },
+    { id: config.ticketNotificationsRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: config.adminRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: config.manageRoleId,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: config.staffRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+],
     });
 
     tickets.set(channel.id, {
@@ -518,7 +525,9 @@ client.on('messageCreate', async (message) => {
 async function handleStaffCommands(message) {
     const member = message.member || await message.guild.members.fetch(message.author.id);
     const hasManagePermission = member.permissions.has(PermissionFlagsBits.ManageMessages);
-    const hasStaffRole = member.roles.cache.has(config.adminRoleId) || member.roles.cache.has(config.manageRoleId);
+    const hasStaffRole = member.roles.cache.has(config.adminRoleId) 
+    || member.roles.cache.has(config.manageRoleId)
+    || member.roles.cache.has(config.staffRoleId); 
     if (!hasManagePermission && !hasStaffRole) return;
 
     const args    = message.content.slice(1).trim().split(/ +/);
@@ -594,6 +603,7 @@ async function convertToTicket(message) {
 }
 
 async function confirmTicketConversion(interaction) {
+    if (!interaction.isRepliable()) return; // ← ekle
     if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
     const oldChannel     = interaction.channel;
     const oldChannelData = tickets.get(oldChannel.id);
@@ -606,10 +616,14 @@ async function confirmTicketConversion(interaction) {
     const newChannel = await guild.channels.create({
         name: `t${ticketNumber}–${staff.username}`, type: ChannelType.GuildText, parent: config.ticketCategoryId,
         permissionOverwrites: [
-            { id: guild.roles.everyone,   deny:  [PermissionFlagsBits.ViewChannel] },
-            { id: staff.id,               allow: [PermissionFlagsBits.ViewChannel] },
-            { id: oldChannelData.userId,  allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
-        ]
+    { id: guild.roles.everyone,             deny:  [PermissionFlagsBits.ViewChannel] },
+    { id: config.ticketNotificationsRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: config.adminRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: config.manageRoleId,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: config.staffRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: staff.id,                         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: oldChannelData.userId,            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] }
+]
     });
 
     tickets.set(newChannel.id, {
