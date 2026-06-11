@@ -547,7 +547,7 @@ async function showCommands(message) {
         },
         {
             name: 'Custom',
-            value: '`!r <message>` - Send custom message and close\n`!u <message>` - Send custom message only',
+            value: '`!r <message>` / `!u <message>` - Send a custom response',
             inline: false
         }
     );
