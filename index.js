@@ -12,7 +12,6 @@ const client = new Client({
     ]
 });
 
-// Configuration
 const config = {
     supportChannelId: process.env.SUPPORT_CHANNEL_ID || '1375627137733890218',
     ticketNotificationsRoleId: process.env.TICKET_NOTIFICATIONS_ROLE_ID || '1375814168921247758',
@@ -24,11 +23,9 @@ const config = {
     transcriptChannelId: process.env.TRANSCRIPT_CHANNEL_ID || '1512906260394152117',
     transcriptBaseUrl: process.env.TRANSCRIPT_BASE_URL || 'https://00virtue.github.io/transcript-viewer',
     staffRoleId: process.env.STAFF_ROLE_ID || '1509407373473878107',
-    // .env'e STATS_BOARD_CHANNEL_ID ekle
     statsBoardChannelId: process.env.STATS_BOARD_CHANNEL_ID || ''
 };
 
-// Hazır mesaj şablonları
 const messageTemplates = {
     done:        { message: 'Your ticket has been resolved. Thank you for contacting support!', description: 'Mark ticket as resolved and close' },
     pending:     { message: 'Your request is currently being reviewed. Please wait for further updates.', description: 'Inform user their request is being reviewed' },
@@ -36,10 +33,13 @@ const messageTemplates = {
     waiting:     { message: 'Your ticket has been escalated to a senior team member for further review.', description: 'Notify user about escalation' },
     evidence:    { message: 'Please first upload your images/video evidence to YouTube, Streamable, or Gyazo. Afterwards, copy and paste the links of your uploaded evidence into a new ticket. If we need more information after that, we\'ll open a chat with you!', description: 'Ask user to upload evidence and open a new ticket with the links' },
     insufficient:{ message: 'Unfortunately, the evidence that you provided isn\'t sufficient enough to determine whether your opponent is cheating or not. If you have more clips then please create a new ticket and we\'ll rereview the report!', description: 'Tell user the provided evidence is not sufficient' },
+    'gave-karma':{ message: 'Thank you for your report! We have added the incident to our internal system and the player will be banned if they continue to cause further issues.', description: 'Tell user the report was added to the internal system' },
+    thanks:      { message: 'We\'ll look into this immediately! Thank you for your patience, we will try and resolve this as soon as possible.', description: 'Tell user the issue will be reviewed as soon as possible' },
+    standby:     { message: 'We are currently processing your request, please stand by.', description: 'Tell user their request is being processed' },
+    'wrong-cat': { message: 'It looks like there might be a better ticket category than the one you selected. Would you mind creating a new ticket?', description: 'Ask user to create a ticket in a better category' },
     inactivity:  { message: 'Your ticket has been closed due to inactivity. If you still require help please make a new ticket.', description: 'Close ticket because of inactivity' }
 };
 
-// Store ticket info
 const tickets = new Map();
 let ticketCounter = 1;
 
@@ -47,18 +47,12 @@ let ticketCounter = 1;
 //  STATS SİSTEMİ
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Her mod için { claimed, closed, username } tutar — 3 dönem ayrı ayrı
-// allTime   → hiç sıfırlanmaz
-// weekly    → Pazartesi 00:00'da sıfırlanır
-// monthly   → Ayın 1'inde 00:00'da sıfırlanır
-
 const statsStore = {
-    allTime: new Map(),  // userId -> { claimed, closed, username }
+    allTime: new Map(),
     weekly:  new Map(),
     monthly: new Map()
 };
 
-// Stat board mesaj ID'leri (3 ayrı mesaj)
 const statsMsgIds = {
     allTime: null,
     weekly:  null,
@@ -75,7 +69,6 @@ function ensureStat(period, userId, username) {
 }
 
 function addStat(userId, username, field) {
-    // field: 'claimed' veya 'closed'
     for (const period of ['allTime', 'weekly', 'monthly']) {
         ensureStat(period, userId, username)[field]++;
     }
@@ -85,19 +78,6 @@ function resetPeriod(period) {
     statsStore[period].clear();
     console.log(`[Stats] ${period} sıfırlandı.`);
 }
-
-// Dönem başlıkları
-const periodTitles = {
-    allTime: '🏆 All Time Leaderboard',
-    weekly:  '📅 Weekly Leaderboard',
-    monthly: '📆 Monthly Leaderboard'
-};
-
-const periodColors = {
-    allTime: '#FFD700',
-    weekly:  '#5865F2',
-    monthly: '#57F287'
-};
 
 function buildEmbed(period) {
     const sorted = [...statsStore[period].entries()]
@@ -120,19 +100,8 @@ function buildEmbed(period) {
         });
     }
 
-    const titles = {
-        allTime: 'All Time',
-        weekly:  'Weekly',
-        monthly: 'Monthly'
-    };
-
-    const colors = {
-        allTime: 0x2B2D31,
-        weekly:  0x2B2D31,
-        monthly: 0x2B2D31
-    };
-
-    const footers = {
+    const titles   = { allTime: 'All Time', weekly: 'Weekly', monthly: 'Monthly' };
+    const footers  = {
         allTime: 'Lifetime statistics · Last updated',
         weekly:  'Resets every Monday · Last updated',
         monthly: 'Resets on the 1st of each month · Last updated'
@@ -141,19 +110,9 @@ function buildEmbed(period) {
     return new EmbedBuilder()
         .setAuthor({ name: `Staff Leaderboard — ${titles[period]}` })
         .setDescription(leaderboard || 'No activity recorded yet.')
-        .setColor(colors[period])
+        .setColor(0x2B2D31)
         .setFooter({ text: footers[period] })
         .setTimestamp();
-}
-
-function getNextMonday() {
-    const now = new Date();
-    const day = now.getDay(); // 0=Sun, 1=Mon ...
-    const diff = (8 - day) % 7 || 7;
-    const next = new Date(now);
-    next.setDate(now.getDate() + diff);
-    next.setHours(0, 0, 0, 0);
-    return next;
 }
 
 async function updateStatsBoard() {
@@ -166,12 +125,8 @@ async function updateStatsBoard() {
         try {
             if (statsMsgIds[period]) {
                 const existing = await channel.messages.fetch(statsMsgIds[period]).catch(() => null);
-                if (existing) {
-                    await existing.edit({ embeds: [embed] });
-                    continue;
-                }
+                if (existing) { await existing.edit({ embeds: [embed] }); continue; }
             }
-            // Mesaj yok veya silinmiş — yeni gönder
             const msg = await channel.send({ embeds: [embed] });
             statsMsgIds[period] = msg.id;
         } catch (err) {
@@ -180,18 +135,15 @@ async function updateStatsBoard() {
     }
 }
 
-// ── Sıfırlama zamanlayıcıları ─────────────────────────────────────────────────
 function scheduleResets() {
-    checkAndReset(); // bot başladığında kontrol et
-    // Her dakika kontrol et (saat başı da yeterli ama dakikalık daha güvenli)
+    checkAndReset();
     setInterval(checkAndReset, 60 * 1000);
 }
 
-let lastWeekReset  = null; // 'YYYY-WW' formatında
-let lastMonthReset = null; // 'YYYY-MM' formatında
+let lastWeekReset  = null;
+let lastMonthReset = null;
 
 function getWeekKey(date) {
-    // ISO hafta: yıl + hafta numarası
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
@@ -206,30 +158,19 @@ function getMonthKey(date) {
 
 async function checkAndReset() {
     const now = new Date();
-
-    // Haftalık: Pazartesi 00:00 oldu mu?
     const weekKey = getWeekKey(now);
-    if (lastWeekReset === null) {
-        lastWeekReset = weekKey; // ilk çalışmada sadece kaydet, sıfırlama
-    } else if (weekKey !== lastWeekReset) {
-        lastWeekReset = weekKey;
-        resetPeriod('weekly');
-        await updateStatsBoard();
-    }
+    if (lastWeekReset === null) { lastWeekReset = weekKey; }
+    else if (weekKey !== lastWeekReset) { lastWeekReset = weekKey; resetPeriod('weekly'); await updateStatsBoard(); }
 
-    // Aylık: Ay değişti mi?
     const monthKey = getMonthKey(now);
-    if (lastMonthReset === null) {
-        lastMonthReset = monthKey;
-    } else if (monthKey !== lastMonthReset) {
-        lastMonthReset = monthKey;
-        resetPeriod('monthly');
-        await updateStatsBoard();
-    }
+    if (lastMonthReset === null) { lastMonthReset = monthKey; }
+    else if (monthKey !== lastMonthReset) { lastMonthReset = monthKey; resetPeriod('monthly'); await updateStatsBoard(); }
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-// Ticket questions configuration
+// ═══════════════════════════════════════════════════════════════════════════════
+//  TICKET SORULARI
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const ticketQuestions = {
     match: [
         { key: 'username',  question: 'What is your NextGames username?',   required: true  },
@@ -252,6 +193,10 @@ const ticketQuestions = {
         { key: 'evidence',  question: 'Please provide a link to your evidence.',   required: false }
     ]
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  READY
+// ═══════════════════════════════════════════════════════════════════════════════
 
 client.once('ready', async () => {
     console.log(`Bot is ready! Logged in as ${client.user.tag}`);
@@ -279,6 +224,10 @@ async function sendSupportMessage() {
     await channel.send({ embeds: [embed], components: [row] });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  INTERACTION HANDLER
+// ═══════════════════════════════════════════════════════════════════════════════
+
 client.on('interactionCreate', async (interaction) => {
     try {
         if (interaction.isModalSubmit()) {
@@ -294,7 +243,7 @@ client.on('interactionCreate', async (interaction) => {
           else if (interaction.customId === 'confirm_ticket_conversion') { await confirmTicketConversion(interaction); }
           else if (interaction.customId === 'cancel_ticket_conversion')  { await cancelTicketConversion(interaction); }
     } catch (err) {
-        if (err.code === 10062) return; // Unknown interaction — bot restart sonrası, ignore et
+        if (err.code === 10062) return;
         console.error('[Interaction Error]', err);
     }
 });
@@ -328,7 +277,6 @@ async function handleTicketModalSubmit(interaction) {
 
     await interaction.deferReply({ flags: 64 });
 
-    // Max 2 açık ticket kontrolü
     const openTickets = [...tickets.values()].filter(
         t => t.userId === interaction.user.id && t.type === ticketType
     );
@@ -359,13 +307,13 @@ async function createTicketChannel(user, ticketType, answers) {
         name: `ticket-${ticketNumber}`,
         type: ChannelType.GuildText,
         parent: config.unclaimedCategoryId,
-permissionOverwrites: [
-    { id: guild.roles.everyone,             deny:  [PermissionFlagsBits.ViewChannel] },
-    { id: config.ticketNotificationsRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: config.adminRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: config.manageRoleId,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: config.staffRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
-],
+        permissionOverwrites: [
+            { id: guild.roles.everyone,             deny:  [PermissionFlagsBits.ViewChannel] },
+            { id: config.ticketNotificationsRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.adminRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.manageRoleId,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.staffRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+        ],
     });
 
     tickets.set(channel.id, {
@@ -467,7 +415,7 @@ async function sendTranscript(channel, channelData, closedBy) {
             closedAt: new Date().toISOString(), messages: serialized
         };
 
-        const rawUrl       = await uploadTranscript(JSON.stringify(transcriptData));
+        const rawUrl        = await uploadTranscript(JSON.stringify(transcriptData));
         const transcriptUrl = `${config.transcriptBaseUrl}?url=${encodeURIComponent(rawUrl)}`;
 
         const embed = new EmbedBuilder()
@@ -492,6 +440,8 @@ async function sendTranscript(channel, channelData, closedBy) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function getFieldName(question) {
     return question
@@ -509,25 +459,41 @@ function getTicketTypeTitle(type) {
     return { match: 'Match Issue', payment: 'Payment Issue', ban: 'Ban Appeal', other: 'General' }[type] || 'General';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MESSAGE CREATE
+// ═══════════════════════════════════════════════════════════════════════════════
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.content.startsWith('!')) { await handleStaffCommands(message); return; }
     if (message.content === '-close')    { await handleCloseCommand(message); return; }
 
+    // Kapanma sayacını sadece yetkili bir moderatör mesaj atarsa iptal et
     const channelData = tickets.get(message.channel.id);
-    if (channelData && channelData.closingTimeout && message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-        clearTimeout(channelData.closingTimeout);
-        delete channelData.closingTimeout;
-        await message.channel.send('Channel deletion cancelled by moderator.');
+    if (channelData && channelData.closingTimeout) {
+        try {
+            const member = message.member ?? await message.guild?.members.fetch(message.author.id).catch(() => null);
+            if (member && member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+                clearTimeout(channelData.closingTimeout);
+                delete channelData.closingTimeout;
+                await message.channel.send('Channel deletion cancelled by moderator.');
+            }
+        } catch (err) {
+            console.error('[CancelTimeout Error]', err);
+        }
     }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  STAFF COMMANDS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 async function handleStaffCommands(message) {
     const member = message.member || await message.guild.members.fetch(message.author.id);
     const hasManagePermission = member.permissions.has(PermissionFlagsBits.ManageMessages);
-    const hasStaffRole = member.roles.cache.has(config.adminRoleId) 
-    || member.roles.cache.has(config.manageRoleId)
-    || member.roles.cache.has(config.staffRoleId); 
+    const hasStaffRole = member.roles.cache.has(config.adminRoleId)
+        || member.roles.cache.has(config.manageRoleId)
+        || member.roles.cache.has(config.staffRoleId);
     if (!hasManagePermission && !hasStaffRole) return;
 
     const args    = message.content.slice(1).trim().split(/ +/);
@@ -546,14 +512,54 @@ async function handleStaffCommands(message) {
 }
 
 async function showCommands(message) {
-    const embed = new EmbedBuilder()
-        .setTitle('📝 Staff Commands & Templates')
-        .setDescription('**Basic Commands:**\n`!me` - Claim ticket\n`!assign @user` - Assign ticket to user\n`!admin` - Escalate to admin\n`!manage` - Escalate to manager\n`!ticket` - Convert to ticket\n`-close` - Close ticket\n\n**Response Templates:**')
-        .setColor('#0099ff');
-    for (const [key, value] of Object.entries(messageTemplates)) {
-        embed.addFields({ name: `!r ${key} / !u ${key}`, value: `${value.description}\n*Message:* "${value.message}"`, inline: false });
+    const templateLines = Object.entries(messageTemplates)
+        .map(([key, value]) => `\`!r ${key}\` - ${value.message}`);
+
+    const templateChunks = [];
+    let currentChunk = '';
+    for (const line of templateLines) {
+        if ((currentChunk + '\n' + line).length > 950) {
+            templateChunks.push(currentChunk);
+            currentChunk = line;
+        } else {
+            currentChunk = currentChunk ? `${currentChunk}\n${line}` : line;
+        }
     }
-    embed.addFields({ name: 'Custom Message', value: '`!r <message>` - Send message and close\n`!u <message>` - Send message without closing', inline: false });
+    if (currentChunk) templateChunks.push(currentChunk);
+
+    const embed = new EmbedBuilder()
+        .setTitle('Staff Commands')
+        .setDescription('`!r` sends a response and closes the ticket.\n`!u` sends the same response without closing.')
+        .setColor('#0099ff');
+
+    embed.addFields(
+        {
+            name: 'Basic',
+            value: [
+                '`!me` - Claim ticket',
+                '`!assign @user` - Assign ticket',
+                '`!admin` - Escalate to admin',
+                '`!manage` - Escalate to manager',
+                '`!ticket` - Convert to ticket',
+                '`-close` - Close ticket'
+            ].join('\n'),
+            inline: false
+        },
+        {
+            name: 'Custom',
+            value: '`!r <message>` - Send custom message and close\n`!u <message>` - Send custom message only',
+            inline: false
+        }
+    );
+
+    templateChunks.forEach((chunk) => {
+        embed.addFields({
+            name: 'Templates',
+            value: chunk,
+            inline: false
+        });
+    });
+
     await message.reply({ embeds: [embed] });
 }
 
@@ -567,10 +573,8 @@ async function claimTicket(message) {
     await message.channel.setParent(config.claimedCategoryId, { lockPermissions: false });
     await message.channel.send(`<@${message.author.id}> is claimed the ticket.`);
 
-    // ── Stat: claim ───────────────────────────────────────────────────────────
     addStat(message.author.id, message.author.username, 'claimed');
     await updateStatsBoard();
-    // ─────────────────────────────────────────────────────────────────────────
 }
 
 async function assignTicket(message, args) {
@@ -603,7 +607,7 @@ async function convertToTicket(message) {
 }
 
 async function confirmTicketConversion(interaction) {
-    if (!interaction.isRepliable()) return; // ← ekle
+    if (!interaction.isRepliable()) return;
     if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
     const oldChannel     = interaction.channel;
     const oldChannelData = tickets.get(oldChannel.id);
@@ -616,14 +620,14 @@ async function confirmTicketConversion(interaction) {
     const newChannel = await guild.channels.create({
         name: `t${ticketNumber}–${staff.username}`, type: ChannelType.GuildText, parent: config.ticketCategoryId,
         permissionOverwrites: [
-    { id: guild.roles.everyone,             deny:  [PermissionFlagsBits.ViewChannel] },
-    { id: config.ticketNotificationsRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: config.adminRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: config.manageRoleId,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: config.staffRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: staff.id,                         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    { id: oldChannelData.userId,            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] }
-]
+            { id: guild.roles.everyone,             deny:  [PermissionFlagsBits.ViewChannel] },
+            { id: config.ticketNotificationsRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.adminRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.manageRoleId,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.staffRoleId,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: staff.id,                         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: oldChannelData.userId,            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] }
+        ]
     });
 
     tickets.set(newChannel.id, {
@@ -711,6 +715,10 @@ async function handleCloseCommand(message) {
     startCloseCountdown(message.channel, message.author.username, message.author.id);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CLOSE COUNTDOWN — DÜZELTİLDİ
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function startCloseCountdown(channel, closedByUsername, closedById) {
     const channelData = tickets.get(channel.id);
     if (!channelData) return;
@@ -722,18 +730,21 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
     channel.send({ embeds: [embed] }).then(() => {
         channelData.closingTimeout = setTimeout(async () => {
             try {
+                // Timeout referansını temizle
+                delete channelData.closingTimeout;
+
                 await sendTranscript(channel, channelData, closedByUsername ?? 'Unknown');
 
-                // ── Stat: closed ─────────────────────────────────────────────────────
                 if (closedById) {
                     addStat(closedById, closedByUsername, 'closed');
                     await updateStatsBoard();
                 }
-                // ────────────────────────────────────────────────────────────────────
 
                 tickets.delete(channel.id);
                 await channel.delete();
-            } catch (error) { console.error('Could not delete channel:', error); }
+            } catch (error) {
+                console.error('Could not delete channel:', error);
+            }
         }, 10000);
     });
 }
