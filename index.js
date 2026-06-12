@@ -502,8 +502,6 @@ async function handleStaffCommands(message) {
     switch (command) {
         case 'me':       await claimTicket(message); break;
         case 'assign':   await assignTicket(message, args); break;
-        case 'admin':    await escalateToRole(message, 'admin'); break;
-        case 'manage':   await escalateToRole(message, 'manage'); break;
         case 'ticket':   await convertToTicket(message); break;
         case 'r':        await respondToTicket(message, args, true); break;
         case 'u':        await respondToTicket(message, args, false); break;
