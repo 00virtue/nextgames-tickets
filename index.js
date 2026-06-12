@@ -489,7 +489,8 @@ client.on('messageCreate', async (message) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function handleStaffCommands(message) {
-    const member = message.member || await message.guild.members.fetch(message.author.id);
+    const member = message.member ?? await message.guild.members.fetch(message.author.id).catch(() => null);
+    if (!member) return;
     const hasManagePermission = member.permissions.has(PermissionFlagsBits.ManageMessages);
     const hasStaffRole = member.roles.cache.has(config.adminRoleId)
         || member.roles.cache.has(config.manageRoleId)
@@ -502,63 +503,13 @@ async function handleStaffCommands(message) {
     switch (command) {
         case 'me':       await claimTicket(message); break;
         case 'assign':   await assignTicket(message, args); break;
+        case 'admin':    await escalateToRole(message, 'admin'); break;
+        case 'manage':   await escalateToRole(message, 'manage'); break;
         case 'ticket':   await convertToTicket(message); break;
         case 'r':        await respondToTicket(message, args, true); break;
         case 'u':        await respondToTicket(message, args, false); break;
         case 'commands': await showCommands(message); break;
     }
-}
-
-async function showCommands(message) {
-    const templateLines = Object.entries(messageTemplates)
-        .map(([key, value]) => `\`!r ${key}\` - ${value.message}`);
-
-    const templateChunks = [];
-    let currentChunk = '';
-    for (const line of templateLines) {
-        if ((currentChunk + '\n' + line).length > 950) {
-            templateChunks.push(currentChunk);
-            currentChunk = line;
-        } else {
-            currentChunk = currentChunk ? `${currentChunk}\n${line}` : line;
-        }
-    }
-    if (currentChunk) templateChunks.push(currentChunk);
-
-    const embed = new EmbedBuilder()
-        .setTitle('Staff Commands')
-        .setDescription('`!r` sends a response and closes the ticket.\n`!u` sends the same response without closing.')
-        .setColor('#0099ff');
-
-    embed.addFields(
-        {
-            name: 'Basic',
-            value: [
-                '`!me` - Claim ticket',
-                '`!assign @user` - Assign ticket',
-                '`!admin` - Escalate to admin',
-                '`!manage` - Escalate to manager',
-                '`!ticket` - Convert to ticket',
-                '`-close` - Close ticket'
-            ].join('\n'),
-            inline: false
-        },
-        {
-            name: 'Custom',
-            value: '`!r <message>` / `!u <message>` - Send a custom response',
-            inline: false
-        }
-    );
-
-    templateChunks.forEach((chunk) => {
-        embed.addFields({
-            name: 'Templates',
-            value: chunk,
-            inline: false
-        });
-    });
-
-    await message.reply({ embeds: [embed] });
 }
 
 async function claimTicket(message) {
@@ -567,8 +518,10 @@ async function claimTicket(message) {
     if (channelData.claimedBy) { await message.reply('This ticket is already claimed!'); return; }
 
     channelData.claimedBy = message.author.id;
-    await message.channel.setName(`t${channelData.number}–${message.author.username}`);
-    await message.channel.setParent(config.claimedCategoryId, { lockPermissions: false });
+
+    try { await message.channel.setName(`t${channelData.number}–${message.author.username}`); } catch (_) {}
+    try { await message.channel.setParent(config.claimedCategoryId, { lockPermissions: false }); } catch (_) {}
+
     await message.channel.send(`<@${message.author.id}> is claimed the ticket.`);
 
     addStat(message.author.id, message.author.username, 'claimed');
@@ -580,8 +533,11 @@ async function assignTicket(message, args) {
     if (!channelData) return;
     const user = message.mentions.users.first();
     if (!user) { await message.reply('Please mention a user to assign this ticket to.'); return; }
+
     channelData.claimedBy = user.id;
-    await message.channel.setName(`t${channelData.number}–${user.username}`);
+
+    try { await message.channel.setName(`t${channelData.number}–${user.username}`); } catch (_) {}
+
     await message.reply(`Ticket assigned to ${user}!`);
 }
 
@@ -590,7 +546,9 @@ async function escalateToRole(message, roleType) {
     if (!channelData) { await message.reply('This command must be used inside a ticket channel.'); return; }
     const roleId = roleType === 'admin' ? config.adminRoleId : config.manageRoleId;
     if (!roleId) { await message.reply('The role for this escalation is not configured.'); return; }
-    await message.channel.setName(`t${channelData.number}-${roleType}`);
+
+    try { await message.channel.setName(`t${channelData.number}-${roleType}`); } catch (_) {}
+
     await message.channel.send(`<@&${roleId}> This ticket needs ${roleType} attention!`);
 }
 
