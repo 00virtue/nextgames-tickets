@@ -545,7 +545,7 @@ async function handleStaffCommands(message) {
         || member.roles.cache.has(config.staffRoleId);
     if (!hasManagePermission && !hasStaffRole) return;
 
-    const args    = message.content.slice(1).trim().split(/ +/);
+    const args = message.content.trim().slice(1).split(/\s+/);
     const command = args.shift().toLowerCase();
 
     switch (command) {
