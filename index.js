@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 require('dotenv').config();
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fs = require('fs');
+const path = require('path');
 
 const client = new Client({
     intents: [
@@ -40,24 +42,69 @@ const messageTemplates = {
     inactivity:  { message: 'Your ticket has been closed due to inactivity. If you still require help please make a new ticket.', description: 'Close ticket because of inactivity' }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PERSISTENCE (JSON dosyasına kaydet/yükle)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DATA_FILE = path.join(__dirname, 'bot_data.json');
+
+function loadData() {
+    try {
+        if (fs.existsSync(DATA_FILE)) {
+            const raw = fs.readFileSync(DATA_FILE, 'utf8');
+            const data = JSON.parse(raw);
+            console.log('[Persistence] Veri yüklendi:', DATA_FILE);
+            return data;
+        }
+    } catch (err) {
+        console.error('[Persistence] Yükleme hatası, sıfırdan başlanıyor:', err);
+    }
+    return null;
+}
+
+function saveData() {
+    try {
+        const data = {
+            ticketCounter,
+            statsStore: {
+                allTime:  Object.fromEntries(statsStore.allTime),
+                weekly:   Object.fromEntries(statsStore.weekly),
+                monthly:  Object.fromEntries(statsStore.monthly)
+            },
+            statsMsgIds,
+            lastWeekReset,
+            lastMonthReset
+        };
+        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (err) {
+        console.error('[Persistence] Kaydetme hatası:', err);
+    }
+}
+
+// Yüklenen veriyi değişkenlere aktar
+const savedData = loadData();
+
 const tickets = new Map();
-let ticketCounter = 1;
+let ticketCounter = savedData?.ticketCounter ?? 46; // varsayılan: 46 (şu anki 45 açık ticketten sonrası)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STATS SİSTEMİ
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const statsStore = {
-    allTime: new Map(),
-    weekly:  new Map(),
-    monthly: new Map()
+    allTime: savedData?.statsStore?.allTime  ? new Map(Object.entries(savedData.statsStore.allTime))  : new Map(),
+    weekly:  savedData?.statsStore?.weekly   ? new Map(Object.entries(savedData.statsStore.weekly))   : new Map(),
+    monthly: savedData?.statsStore?.monthly  ? new Map(Object.entries(savedData.statsStore.monthly))  : new Map()
 };
 
-const statsMsgIds = {
+const statsMsgIds = savedData?.statsMsgIds ?? {
     allTime: null,
     weekly:  null,
     monthly: null
 };
+
+let lastWeekReset  = savedData?.lastWeekReset  ?? null;
+let lastMonthReset = savedData?.lastMonthReset ?? null;
 
 function ensureStat(period, userId, username) {
     if (!statsStore[period].has(userId)) {
@@ -72,11 +119,13 @@ function addStat(userId, username, field) {
     for (const period of ['allTime', 'weekly', 'monthly']) {
         ensureStat(period, userId, username)[field]++;
     }
+    saveData(); // her stat değişiminde kaydet
 }
 
 function resetPeriod(period) {
     statsStore[period].clear();
     console.log(`[Stats] ${period} sıfırlandı.`);
+    saveData();
 }
 
 function buildEmbed(period) {
@@ -129,6 +178,7 @@ async function updateStatsBoard() {
             }
             const msg = await channel.send({ embeds: [embed] });
             statsMsgIds[period] = msg.id;
+            saveData(); // yeni mesaj ID'si kaydedilsin
         } catch (err) {
             console.error(`[Stats] ${period} board güncellenemedi:`, err);
         }
@@ -139,9 +189,6 @@ function scheduleResets() {
     checkAndReset();
     setInterval(checkAndReset, 60 * 1000);
 }
-
-let lastWeekReset  = null;
-let lastMonthReset = null;
 
 function getWeekKey(date) {
     const d = new Date(date);
@@ -159,11 +206,11 @@ function getMonthKey(date) {
 async function checkAndReset() {
     const now = new Date();
     const weekKey = getWeekKey(now);
-    if (lastWeekReset === null) { lastWeekReset = weekKey; }
+    if (lastWeekReset === null) { lastWeekReset = weekKey; saveData(); }
     else if (weekKey !== lastWeekReset) { lastWeekReset = weekKey; resetPeriod('weekly'); await updateStatsBoard(); }
 
     const monthKey = getMonthKey(now);
-    if (lastMonthReset === null) { lastMonthReset = monthKey; }
+    if (lastMonthReset === null) { lastMonthReset = monthKey; saveData(); }
     else if (monthKey !== lastMonthReset) { lastMonthReset = monthKey; resetPeriod('monthly'); await updateStatsBoard(); }
 }
 
@@ -200,6 +247,7 @@ const ticketQuestions = {
 
 client.once('ready', async () => {
     console.log(`Bot is ready! Logged in as ${client.user.tag}`);
+    console.log(`[Persistence] Ticket counter: ${ticketCounter}`);
     await sendSupportMessage();
     scheduleResets();
     await updateStatsBoard();
@@ -302,6 +350,7 @@ async function handleTicketModalSubmit(interaction) {
 async function createTicketChannel(user, ticketType, answers) {
     const guild        = client.guilds.cache.first();
     const ticketNumber = ticketCounter++;
+    saveData(); // counter artınca hemen kaydet
 
     const channel = await guild.channels.create({
         name: `ticket-${ticketNumber}`,
@@ -468,7 +517,6 @@ client.on('messageCreate', async (message) => {
     if (message.content.startsWith('!')) { await handleStaffCommands(message); return; }
     if (message.content === '-close')    { await handleCloseCommand(message); return; }
 
-    // Kapanma sayacını sadece yetkili bir moderatör mesaj atarsa iptal et
     const channelData = tickets.get(message.channel.id);
     if (channelData && channelData.closingTimeout) {
         try {
@@ -571,6 +619,7 @@ async function confirmTicketConversion(interaction) {
 
     const guild        = interaction.guild;
     const ticketNumber = ticketCounter++;
+    saveData(); // counter artınca kaydet
     const staff        = interaction.user;
 
     const newChannel = await guild.channels.create({
@@ -672,7 +721,7 @@ async function handleCloseCommand(message) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  CLOSE COUNTDOWN — DÜZELTİLDİ
+//  CLOSE COUNTDOWN
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function startCloseCountdown(channel, closedByUsername, closedById) {
@@ -686,7 +735,6 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
     channel.send({ embeds: [embed] }).then(() => {
         channelData.closingTimeout = setTimeout(async () => {
             try {
-                // Timeout referansını temizle
                 delete channelData.closingTimeout;
 
                 await sendTranscript(channel, channelData, closedByUsername ?? 'Unknown');
