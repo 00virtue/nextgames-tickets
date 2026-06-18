@@ -323,7 +323,7 @@ async function handleTicketModalSubmit(interaction) {
     const ticketType = interaction.customId.replace('ticket_modal_', '');
     const questions  = ticketQuestions[ticketType];
 
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply({ ephemeral: true });
 
     const openTickets = [...tickets.values()].filter(
         t => t.userId === interaction.user.id && t.type === ticketType
@@ -556,7 +556,6 @@ async function handleStaffCommands(message) {
         case 'ticket':   await convertToTicket(message); break;
         case 'r':        await respondToTicket(message, args, true); break;
         case 'u':        await respondToTicket(message, args, false); break;
-        case 'commands': await showCommands(message); break;
     }
 }
 
