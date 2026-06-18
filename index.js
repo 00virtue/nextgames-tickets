@@ -505,7 +505,7 @@ function getFieldName(question) {
 }
 
 function getTicketTypeTitle(type) {
-    return { match: 'Match Issue', payment: 'Payment Issue', ban: 'Ban Appeal', other: 'General' }[type] || 'General';
+    return { match: 'Match Issue', payment: 'Payment Issue', ban: 'Ban Appeal', other: 'Other' }[type] || 'Other';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
