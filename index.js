@@ -716,8 +716,19 @@ async function cancelResponse(interaction) {
 }
 
 async function handleCloseCommand(message) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
-    startCloseCountdown(message.channel, message.author.username, message.author.id);
+    const channelData = tickets.get(message.channel.id);
+    if (!channelData) return;
+
+    const isOwner = message.author.id === channelData.userId;
+    const isStaff = message.member.permissions.has(PermissionFlagsBits.ManageMessages);
+
+    if (!isOwner && !isStaff) return;
+
+    startCloseCountdown(
+        message.channel,
+        message.author.username,
+        message.author.id
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
