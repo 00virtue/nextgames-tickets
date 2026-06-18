@@ -617,10 +617,9 @@ async function confirmTicketConversion(interaction) {
     const oldChannelData = tickets.get(oldChannel.id);
     if (!oldChannelData) { await interaction.update({ content: 'Ticket bilgisi bulunamadı!', embeds: [], components: [] }); return; }
 
-    const guild        = interaction.guild;
-    const ticketNumber = ticketCounter++;
-    saveData(); // counter artınca kaydet
-    const staff        = interaction.user;
+    const guild = interaction.guild;
+    const ticketNumber = oldChannelData.number; // ✅ FIX
+    const staff = interaction.user;
 
     const newChannel = await guild.channels.create({
         name: `t${ticketNumber}–${staff.username}`, type: ChannelType.GuildText, parent: config.ticketCategoryId,
