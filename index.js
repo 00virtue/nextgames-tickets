@@ -349,7 +349,8 @@ async function handleTicketModalSubmit(interaction) {
 
 async function createTicketChannel(user, ticketType, answers) {
     const guild        = client.guilds.cache.first();
-    const ticketNumber = oldChannelData.number;
+    const ticketNumber = ticketCounter++;
+saveData();
 
     const channel = await guild.channels.create({
         name: `ticket-${ticketNumber}`,
