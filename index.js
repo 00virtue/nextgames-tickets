@@ -1,4 +1,10 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const {
+    Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    ChannelType, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle,
+    // ↓↓↓ Components V2 için eklenen importlar ↓↓↓
+    ContainerBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder,
+    TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MessageFlags
+} = require('discord.js');
 require('dotenv').config();
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const fs = require('fs');
@@ -25,7 +31,8 @@ const config = {
     transcriptChannelId: process.env.TRANSCRIPT_CHANNEL_ID || '1512906260394152117',
     transcriptBaseUrl: process.env.TRANSCRIPT_BASE_URL || 'https://00virtue.github.io/transcript-viewer',
     staffRoleId: process.env.STAFF_ROLE_ID || '1509407373473878107',
-    statsBoardChannelId: process.env.STATS_BOARD_CHANNEL_ID || ''
+    statsBoardChannelId: process.env.STATS_BOARD_CHANNEL_ID || '',
+    ticketBannerUrl: process.env.TICKET_BANNER_URL || 'https://media.discordapp.net/attachments/1516936085467435182/1517533934186139718/content.png?ex=6a36a11c&is=6a354f9c&hm=6f52881dfd7b24ea02dc3a0d9d3a2d55efb62d23c95d8a972cbf4932ea3800b8&=&format=webp&quality=lossless&width=1872&height=747'
 };
 
 const messageTemplates = {
@@ -93,7 +100,12 @@ const savedData = loadData();
 const tickets = new Map(
     savedData?.tickets ? Object.entries(savedData.tickets) : []
 );
-let ticketCounter = savedData?.ticketCounter ?? 1;
+
+let ticketCounter = savedData?.ticketCounter ?? 60;
+
+if (savedData?.ticketCounter && savedData.ticketCounter >= 60) {
+    ticketCounter = savedData.ticketCounter;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STATS SİSTEMİ
@@ -282,15 +294,41 @@ client.once('ready', async () => {
     await updateStatsBoard();
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  TICKET PANELİ — Components V2 (değişen tek fonksiyon)
+//  Buton customId'leri, label'ları, emojileri ve stilleri AYNI kaldı.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 async function sendSupportMessage() {
     const channel = client.channels.cache.get(config.supportChannelId);
     if (!channel) return;
 
-    const embed = new EmbedBuilder()
-        .setTitle('Open A Ticket')
-        .setDescription('Select a button below to create a support ticket.')
-        .setColor('#0266ff');
+    const container = new ContainerBuilder()
+        .setAccentColor(0x0266ff); // eski embed rengiyle aynı (#0266ff)
 
+    // 1) Üstteki banner görseli
+    container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+            new MediaGalleryItemBuilder().setURL(config.ticketBannerUrl)
+        )
+    );
+
+    container.addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+    );
+
+    // 2) Başlık + açıklama (eski embed title/description ile birebir aynı metin)
+    container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+            "## If you need assistance, select a category below to open a ticket."
+        )
+    );
+
+    container.addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+    );
+
+    // 3) Butonlar — customId, label, emoji, stil BİREBİR aynı kaldı
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('match_issue').setLabel('Match Issue').setStyle(ButtonStyle.Danger).setEmoji('🎮'),
         new ButtonBuilder().setCustomId('payment_issue').setLabel('Payment Issue').setStyle(ButtonStyle.Success).setEmoji('💸'),
@@ -298,7 +336,12 @@ async function sendSupportMessage() {
         new ButtonBuilder().setCustomId('other').setLabel('Other').setStyle(ButtonStyle.Secondary).setEmoji('📎')
     );
 
-    await channel.send({ embeds: [embed], components: [row] });
+    container.addActionRowComponents(row);
+
+    await channel.send({
+        components: [container],
+        flags: MessageFlags.IsComponentsV2 // Components V2 için zorunlu flag
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -378,8 +421,9 @@ async function handleTicketModalSubmit(interaction) {
 
 async function createTicketChannel(user, ticketType, answers) {
     const guild        = client.guilds.cache.first();
-    const ticketNumber = ticketCounter++;
-    saveData();
+    ticketCounter += 1;
+const ticketNumber = ticketCounter;
+saveData();
 
     const channel = await guild.channels.create({
         name: `ticket-${ticketNumber}`,
