@@ -32,7 +32,7 @@ const config = {
     transcriptBaseUrl: process.env.TRANSCRIPT_BASE_URL || 'https://00virtue.github.io/transcript-viewer',
     staffRoleId: process.env.STAFF_ROLE_ID || '1509407373473878107',
     statsBoardChannelId: process.env.STATS_BOARD_CHANNEL_ID || '',
-    ticketBannerUrl: process.env.TICKET_BANNER_URL || 'https://media.discordapp.net/attachments/1516936085467435182/1517540041143091291/content.png?ex=6a36a6cc&is=6a35554c&hm=479450ce03f9e88a1fe264f29eabdeb3c0ca93812ca3e830d5369610ca40db1b&=&format=webp&quality=lossless'
+    ticketBannerUrl: process.env.TICKET_BANNER_URL || 'https://cdn.discordapp.com/attachments/1516936085467435182/1517541257667416125/content_1.png?ex=6a36a7ee&is=6a35566e&hm=a0dde6d277cad7aadf2f006ac07210636e53c844445222aad8069008b179d482&'
 };
 
 const messageTemplates = {
