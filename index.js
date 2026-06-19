@@ -69,6 +69,8 @@ function saveData() {
     try {
         const data = {
             ticketCounter,
+            // Aktif ticket'ları da kaydet (channel.id -> ticket verisi)
+            tickets: Object.fromEntries(tickets),
             statsStore: {
                 allTime:  Object.fromEntries(statsStore.allTime),
                 weekly:   Object.fromEntries(statsStore.weekly),
@@ -87,8 +89,11 @@ function saveData() {
 // Yüklenen veriyi değişkenlere aktar
 const savedData = loadData();
 
-const tickets = new Map();
-let ticketCounter = savedData?.ticketCounter ?? 46; // varsayılan: 46 (şu anki 45 açık ticketten sonrası)
+// Ticket'ları yükle (closingTimeout gibi runtime-only şeyler atlanır)
+const tickets = new Map(
+    savedData?.tickets ? Object.entries(savedData.tickets) : []
+);
+let ticketCounter = savedData?.ticketCounter ?? 1;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STATS SİSTEMİ
@@ -122,7 +127,7 @@ function addStat(userId, username, field) {
     for (const period of ['allTime', 'weekly', 'monthly']) {
         ensureStat(period, userId, username)[field]++;
     }
-    saveData(); // her stat değişiminde kaydet
+    saveData();
 }
 
 function resetPeriod(period) {
@@ -181,7 +186,7 @@ async function updateStatsBoard() {
             }
             const msg = await channel.send({ embeds: [embed] });
             statsMsgIds[period] = msg.id;
-            saveData(); // yeni mesaj ID'si kaydedilsin
+            saveData();
         } catch (err) {
             console.error(`[Stats] ${period} board güncellenemedi:`, err);
         }
@@ -251,6 +256,27 @@ const ticketQuestions = {
 client.once('ready', async () => {
     console.log(`Bot is ready! Logged in as ${client.user.tag}`);
     console.log(`[Persistence] Ticket counter: ${ticketCounter}`);
+
+    // Bot yeniden başladığında kayıtlı ticket kanallarını Discord'da doğrula.
+    // Discord'da artık mevcut olmayan kanalları Map'ten temizle.
+    if (tickets.size > 0) {
+        const guild = client.guilds.cache.first();
+        let cleaned = 0;
+        for (const [channelId] of tickets) {
+            const ch = guild?.channels.cache.get(channelId)
+                ?? await guild?.channels.fetch(channelId).catch(() => null);
+            if (!ch) {
+                tickets.delete(channelId);
+                cleaned++;
+            }
+        }
+        if (cleaned > 0) {
+            console.log(`[Persistence] ${cleaned} eski ticket kaydı temizlendi.`);
+            saveData();
+        }
+        console.log(`[Persistence] ${tickets.size} aktif ticket yüklendi.`);
+    }
+
     await sendSupportMessage();
     scheduleResets();
     await updateStatsBoard();
@@ -353,7 +379,7 @@ async function handleTicketModalSubmit(interaction) {
 async function createTicketChannel(user, ticketType, answers) {
     const guild        = client.guilds.cache.first();
     const ticketNumber = ticketCounter++;
-saveData();
+    saveData();
 
     const channel = await guild.channels.create({
         name: `ticket-${ticketNumber}`,
@@ -372,6 +398,7 @@ saveData();
         number: ticketNumber, userId: user.id, type: ticketType,
         answers, claimedBy: null, createdAt: new Date().toISOString()
     });
+    saveData(); // yeni ticket kaydedilsin
 
     const staffEmbed = new EmbedBuilder().setColor('#38B2AC').setTitle(getTicketTypeTitle(ticketType));
     ticketQuestions[ticketType].forEach(q => {
@@ -568,6 +595,7 @@ async function claimTicket(message) {
     if (channelData.claimedBy) { await message.reply('This ticket is already claimed!'); return; }
 
     channelData.claimedBy = message.author.id;
+    saveData(); // claim kaydedilsin
 
     try { await message.channel.setName(`t${channelData.number}–${message.author.username}`); } catch (_) {}
     try { await message.channel.setParent(config.claimedCategoryId, { lockPermissions: false }); } catch (_) {}
@@ -585,6 +613,7 @@ async function assignTicket(message, args) {
     if (!user) { await message.reply('Please mention a user to assign this ticket to.'); return; }
 
     channelData.claimedBy = user.id;
+    saveData();
 
     try { await message.channel.setName(`t${channelData.number}–${user.username}`); } catch (_) {}
 
@@ -620,7 +649,7 @@ async function confirmTicketConversion(interaction) {
     if (!oldChannelData) { await interaction.update({ content: 'Ticket bilgisi bulunamadı!', embeds: [], components: [] }); return; }
 
     const guild = interaction.guild;
-    const ticketNumber = oldChannelData.number; // ✅ FIX
+    const ticketNumber = oldChannelData.number;
     const staff = interaction.user;
 
     const newChannel = await guild.channels.create({
@@ -656,6 +685,7 @@ async function confirmTicketConversion(interaction) {
     await interaction.update({ content: 'Ticket converted successfully!', embeds: [], components: [] });
 
     tickets.delete(oldChannel.id);
+    saveData();
     await sendTranscript(oldChannel, oldChannelData, staff.username);
     setTimeout(async () => { try { await oldChannel.delete(); } catch (_) {} }, 2000);
 }
@@ -757,6 +787,7 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
                 }
 
                 tickets.delete(channel.id);
+                saveData(); // ticket kapanınca sil ve kaydet
                 await channel.delete();
             } catch (error) {
                 console.error('Could not delete channel:', error);
