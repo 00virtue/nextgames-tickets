@@ -2,8 +2,15 @@ const {
     Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
     ChannelType, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle,
     // ↓↓↓ Components V2 için eklenen importlar ↓↓↓
-    ContainerBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder,
-    TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MessageFlags
+ContainerBuilder,
+SectionBuilder,
+ThumbnailBuilder,
+MediaGalleryBuilder,
+MediaGalleryItemBuilder,
+TextDisplayBuilder,
+SeparatorBuilder,
+SeparatorSpacingSize,
+MessageFlags
 } = require('discord.js');
 require('dotenv').config();
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
@@ -21,7 +28,7 @@ const client = new Client({
 });
 
 const config = {
-    supportChannelId: process.env.SUPPORT_CHANNEL_ID || '1375627137733890218',
+    supportChannelId: process.env.SUPPORT_CHANNEL_ID || '1521231517693509665',
     ticketNotificationsRoleId: process.env.TICKET_NOTIFICATIONS_ROLE_ID || '1375814168921247758',
     unclaimedCategoryId: process.env.UNCLAIMED_CATEGORY_ID || '1375637343540609034',
     claimedCategoryId: process.env.CLAIMED_CATEGORY_ID || '1378015775817732226',
@@ -32,7 +39,7 @@ const config = {
     transcriptBaseUrl: process.env.TRANSCRIPT_BASE_URL || 'https://00virtue.github.io/transcript-viewer',
     staffRoleId: process.env.STAFF_ROLE_ID || '1509407373473878107',
     statsBoardChannelId: process.env.STATS_BOARD_CHANNEL_ID || '',
-    ticketBannerUrl: process.env.TICKET_BANNER_URL || 'https://cdn.discordapp.com/attachments/1516936085467435182/1517541257667416125/content_1.png?ex=6a36a7ee&is=6a35566e&hm=a0dde6d277cad7aadf2f006ac07210636e53c844445222aad8069008b179d482&'
+    ticketBannerUrl: process.env.TICKET_BANNER_URL || 'https://cdn.discordapp.com/icons/801201367389044747/cecde32f9fd2d8e515d9d0b7726b8b82.webp?size=1024'
 };
 
 const messageTemplates = {
@@ -304,29 +311,31 @@ async function sendSupportMessage() {
     if (!channel) return;
 
     const container = new ContainerBuilder()
-        .setAccentColor(0x0266ff); // eski embed rengiyle aynı (#0266ff)
+    .setAccentColor(0x0266ff);
 
-    // 1) Üstteki banner görseli
-    container.addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-            new MediaGalleryItemBuilder().setURL(config.ticketBannerUrl)
-        )
-    );
-
-    container.addSeparatorComponents(
-        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
-    );
-
-    // 2) Başlık + açıklama (eski embed title/description ile birebir aynı metin)
-    container.addTextDisplayComponents(
+const section = new SectionBuilder()
+    .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            "## If you need assistance, select a category below to open a ticket."
+            "## [NextGames - Support](https://www.nextgames.gg/)"
+        ),
+        new TextDisplayBuilder().setContent(
+            "If you need assistance, select a category below to open a ticket."
+        ),
+                new TextDisplayBuilder().setContent(
+            "Please answer all questions as clearly as possible."
         )
+    )
+    .setThumbnailAccessory(
+        new ThumbnailBuilder().setURL(config.ticketBannerUrl)
     );
 
-    container.addSeparatorComponents(
-        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
-    );
+container.addSectionComponents(section); // <-- BUNU EKLE
+
+container.addSeparatorComponents(
+    new SeparatorBuilder()
+        .setDivider(true)
+        .setSpacing(SeparatorSpacingSize.Small)
+);
 
     // 3) Butonlar — customId, label, emoji, stil BİREBİR aynı kaldı
     const row = new ActionRowBuilder().addComponents(
