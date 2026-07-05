@@ -813,6 +813,8 @@ async function handleCloseCommand(message) {
 
     if (!isOwner && !isStaff) return;
 
+    message.delete().catch(() => {}); // ← "-close" delete
+
     startCloseCountdown(
         message.channel,
         message.author.username,
