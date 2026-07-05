@@ -787,7 +787,12 @@ async function confirmResponse(interaction) {
         await (await user.createDM()).send({ embeds: [dmEmbed] });
     } catch (_) {}
 
-    await interaction.update({ content: `✅ Message sent: ${responseMessage}`, embeds: [], components: [] });
+    const sentEmbed = new EmbedBuilder()
+        .setTitle('✅ Message Sent Successfully')
+        .setDescription(responseMessage)
+        .setColor('#00ff00');
+
+    await interaction.update({ content: null, embeds: [sentEmbed], components: [] });
     delete channelData.pendingResponse;
 
     if (shouldClose) startCloseCountdown(interaction.channel, staffUsername ?? interaction.user.username, staffId ?? interaction.user.id);
