@@ -591,6 +591,17 @@ function getTicketTypeTitle(type) {
     return { match: 'Match Issue', payment: 'Payment Issue', ban: 'Ban Appeal', other: 'Other' }[type] || 'Other';
 }
 
+// Tüm staff yetki kontrolünü tek yerden yapan yardımcı fonksiyon.
+// ManageMessages iznine SAHİP OLMASA da admin/manage/staff rolü olan biri de staff sayılır.
+function isStaffMember(member) {
+    if (!member) return false;
+    const hasManagePermission = member.permissions.has(PermissionFlagsBits.ManageMessages);
+    const hasStaffRole = member.roles.cache.has(config.adminRoleId)
+        || member.roles.cache.has(config.manageRoleId)
+        || member.roles.cache.has(config.staffRoleId);
+    return hasManagePermission || hasStaffRole;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MESSAGE CREATE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -621,12 +632,7 @@ client.on('messageCreate', async (message) => {
 
 async function handleStaffCommands(message) {
     const member = message.member ?? await message.guild.members.fetch(message.author.id).catch(() => null);
-    if (!member) return;
-    const hasManagePermission = member.permissions.has(PermissionFlagsBits.ManageMessages);
-    const hasStaffRole = member.roles.cache.has(config.adminRoleId)
-        || member.roles.cache.has(config.manageRoleId)
-        || member.roles.cache.has(config.staffRoleId);
-    if (!hasManagePermission && !hasStaffRole) return;
+    if (!isStaffMember(member)) return;
 
     const args = message.content.trim().slice(1).split(/\s+/);
     const command = args.shift().toLowerCase();
@@ -696,7 +702,7 @@ async function convertToTicket(message) {
 
 async function confirmTicketConversion(interaction) {
     if (!interaction.isRepliable()) return;
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
+    if (!isStaffMember(interaction.member)) return;
     const oldChannel     = interaction.channel;
     const oldChannelData = tickets.get(oldChannel.id);
     if (!oldChannelData) { await interaction.update({ content: 'Ticket bilgisi bulunamadı!', embeds: [], components: [] }); return; }
@@ -744,6 +750,7 @@ async function confirmTicketConversion(interaction) {
 }
 
 async function cancelTicketConversion(interaction) {
+    if (!isStaffMember(interaction.member)) return;
     await interaction.update({ content: 'Ticket conversion cancelled.', embeds: [], components: [] });
 }
 
@@ -751,6 +758,18 @@ async function respondToTicket(message, args, shouldClose) {
     const channelData = tickets.get(message.channel.id);
     if (!channelData) return;
     if (args.length === 0) { await message.reply('Please provide a response message or template name.'); return; }
+
+    // Bekleyen eski bir onay varsa, o butonları devre dışı bırak (üst üste !r / !u kullanımı için)
+    if (channelData.pendingResponse?.botMessageId) {
+        try {
+            const oldMsg = await message.channel.messages.fetch(channelData.pendingResponse.botMessageId);
+            const disabledRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('confirm_response').setStyle(ButtonStyle.Success).setEmoji('✅').setDisabled(true),
+                new ButtonBuilder().setCustomId('cancel_response').setStyle(ButtonStyle.Danger).setEmoji('❌').setDisabled(true)
+            );
+            await oldMsg.edit({ components: [disabledRow] });
+        } catch (_) {}
+    }
 
     const firstArg = args[0].toLowerCase();
     const response = messageTemplates[firstArg] ? messageTemplates[firstArg].message : args.join(' ');
@@ -773,6 +792,7 @@ async function respondToTicket(message, args, shouldClose) {
 }
 
 async function confirmResponse(interaction) {
+    if (!isStaffMember(interaction.member)) return;
     const channelData = tickets.get(interaction.channel.id);
     if (!channelData || !channelData.pendingResponse) return;
     const { message: responseMessage, shouldClose, staffUsername, staffId } = channelData.pendingResponse;
@@ -799,6 +819,7 @@ async function confirmResponse(interaction) {
 }
 
 async function cancelResponse(interaction) {
+    if (!isStaffMember(interaction.member)) return;
     const channelData = tickets.get(interaction.channel.id);
     if (channelData) delete channelData.pendingResponse;
     await interaction.update({ content: 'Response cancelled.', embeds: [], components: [] });
@@ -813,7 +834,7 @@ async function handleCloseCommand(message) {
 
     if (!isOwner && !isStaff) return;
 
-    message.delete().catch(() => {}); // ← "-close" delete
+    message.delete().catch(() => {}); // ← "-close" yazısını sil
 
     startCloseCountdown(
         message.channel,
