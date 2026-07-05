@@ -759,19 +759,10 @@ async function respondToTicket(message, args, shouldClose) {
     if (!channelData) return;
     if (args.length === 0) { await message.reply('Please provide a response message or template name.'); return; }
 
-    // Bekleyen eski bir onay varsa, o butonları devre dışı bırak (üst üste !r / !u kullanımı için)
-    if (channelData.pendingResponse?.botMessageId) {
-        try {
-            const oldMsg = await message.channel.messages.fetch(channelData.pendingResponse.botMessageId);
-            const disabledRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('confirm_response').setStyle(ButtonStyle.Success).setEmoji('✅').setDisabled(true),
-                new ButtonBuilder().setCustomId('cancel_response').setStyle(ButtonStyle.Danger).setEmoji('❌').setDisabled(true)
-            );
-            await oldMsg.edit({ components: [disabledRow] });
-        } catch (_) {}
-    }
+    message.delete().catch(() => {}); // "!r"/"!u" komut mesajını sil
 
     const firstArg = args[0].toLowerCase();
+    
     const response = messageTemplates[firstArg] ? messageTemplates[firstArg].message : args.join(' ');
 
     const embed = new EmbedBuilder()
@@ -809,7 +800,7 @@ async function confirmResponse(interaction) {
 
     const sentEmbed = new EmbedBuilder()
         .setTitle('✅ Message Sent Successfully')
-        .setDescription(responseMessage)
+        .setDescription(`${responseMessage}\n\nSent by <@${staffId ?? interaction.user.id}>`)
         .setColor('#00ff00');
 
     await interaction.update({ content: null, embeds: [sentEmbed], components: [] });
@@ -822,7 +813,12 @@ async function cancelResponse(interaction) {
     if (!isStaffMember(interaction.member)) return;
     const channelData = tickets.get(interaction.channel.id);
     if (channelData) delete channelData.pendingResponse;
-    await interaction.update({ content: 'Response cancelled.', embeds: [], components: [] });
+
+    const cancelledEmbed = new EmbedBuilder()
+        .setTitle('❌ Response Cancelled')
+        .setColor('#ff0000');
+
+    await interaction.update({ content: null, embeds: [cancelledEmbed], components: [] });
 }
 
 async function handleCloseCommand(message) {
