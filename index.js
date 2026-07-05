@@ -816,6 +816,7 @@ async function cancelResponse(interaction) {
 
     const cancelledEmbed = new EmbedBuilder()
         .setTitle('❌ Response Cancelled')
+        .setDescription(`Cancelled by <@${interaction.user.id}>`)
         .setColor('#ff0000');
 
     await interaction.update({ content: null, embeds: [cancelledEmbed], components: [] });
