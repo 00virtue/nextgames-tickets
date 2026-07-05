@@ -787,7 +787,7 @@ async function confirmResponse(interaction) {
         await (await user.createDM()).send({ embeds: [dmEmbed] });
     } catch (_) {}
 
-    await interaction.update({ content: 'Response sent successfully!', embeds: [], components: [] });
+    await interaction.update({ content: `✅ Message sent: ${responseMessage}`, embeds: [], components: [] });
     delete channelData.pendingResponse;
 
     if (shouldClose) startCloseCountdown(interaction.channel, staffUsername ?? interaction.user.username, staffId ?? interaction.user.id);
