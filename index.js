@@ -772,7 +772,7 @@ async function respondToTicket(message, args, shouldClose) {
         new ButtonBuilder().setCustomId('confirm_response').setStyle(ButtonStyle.Success).setEmoji('✅'),
         new ButtonBuilder().setCustomId('cancel_response').setStyle(ButtonStyle.Danger).setEmoji('❌')
     );
-    const botMessage = await message.reply({ embeds: [embed], components: [row] });
+    const botMessage = await message.channel.send({ embeds: [embed], components: [row] });
 
     channelData.pendingResponse = {
         message: response, shouldClose,
