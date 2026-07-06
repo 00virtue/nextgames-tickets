@@ -425,6 +425,7 @@ async function handleTicketModalSubmit(interaction) {
     });
 
     await createTicketChannel(interaction.user, ticketType, answers);
+    console.log("TICKET CREATED:", channel.id);
     await interaction.editReply({ content: 'Your ticket has been successfully created! Please check your DMs.' });
 }
 
@@ -823,6 +824,7 @@ async function cancelResponse(interaction) {
 }
 
 async function handleCloseCommand(message) {
+    console.log("CLOSE:", message.channel.id, tickets.get(message.channel.id));
     const channelData = tickets.get(message.channel.id);
     if (!channelData) return;
 
