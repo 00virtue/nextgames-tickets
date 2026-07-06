@@ -291,7 +291,7 @@ client.once('ready', async () => {
 
     client.user.setPresence({
         activities: [{ name: 'https://nextgames.gg', type: 0 }],
-        status: 'dnd'
+        status: 'online'
     });
 
     // Bot yeniden başladığında kayıtlı ticket kanallarını Discord'da doğrula.
