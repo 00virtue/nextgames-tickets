@@ -871,7 +871,7 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
         ]
     });
 
-    setTimeout(async () => {
+    const timeout = setTimeout(async () => {
         try {
             tickets.delete(channel.id);
             saveData();
@@ -888,6 +888,9 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
             console.error('Close error:', err);
         }
     }, 10000);
+
+    // 🔥 BURASI KRİTİK
+    channelData.closingTimeout = timeout;
 }
 
 client.login(process.env.BOT_TOKEN);
