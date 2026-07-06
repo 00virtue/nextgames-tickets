@@ -81,19 +81,32 @@ function loadData() {
 
 function saveData() {
     try {
+        const safeTickets = {};
+
+        for (const [id, t] of tickets) {
+            safeTickets[id] = {
+                number: t.number,
+                userId: t.userId,
+                type: t.type,
+                answers: t.answers,
+                claimedBy: t.claimedBy,
+                createdAt: t.createdAt
+            };
+        }
+
         const data = {
             ticketCounter,
-            // Aktif ticket'ları da kaydet (channel.id -> ticket verisi)
-            tickets: Object.fromEntries(tickets),
+            tickets: safeTickets,
             statsStore: {
-                allTime:  Object.fromEntries(statsStore.allTime),
-                weekly:   Object.fromEntries(statsStore.weekly),
-                monthly:  Object.fromEntries(statsStore.monthly)
+                allTime: Object.fromEntries(statsStore.allTime),
+                weekly: Object.fromEntries(statsStore.weekly),
+                monthly: Object.fromEntries(statsStore.monthly)
             },
             statsMsgIds,
             lastWeekReset,
             lastMonthReset
         };
+
         fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     } catch (err) {
         console.error('[Persistence] Kaydetme hatası:', err);
@@ -850,30 +863,31 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
     const channelData = tickets.get(channel.id);
     if (!channelData) return;
 
-    const embed = new EmbedBuilder()
-        .setDescription('**Deleting channel in 10 seconds**\nModerators can type anything to cancel')
-        .setColor('#ff0000');
-
-    channel.send({ embeds: [embed] }).then(() => {
-        channelData.closingTimeout = setTimeout(async () => {
-            try {
-                delete channelData.closingTimeout;
-
-                await sendTranscript(channel, channelData, closedByUsername ?? 'Unknown');
-
-                if (closedById) {
-                    addStat(closedById, closedByUsername, 'closed');
-                    await updateStatsBoard();
-                }
-
-                tickets.delete(channel.id);
-                saveData(); // ticket kapanınca sil ve kaydet
-                await channel.delete();
-            } catch (error) {
-                console.error('Could not delete channel:', error);
-            }
-        }, 10000);
+    channel.send({
+        embeds: [
+            new EmbedBuilder()
+                .setDescription('**Deleting channel in 10 seconds**\nModerators can type anything to cancel')
+                .setColor('#ff0000')
+        ]
     });
+
+    setTimeout(async () => {
+        try {
+            tickets.delete(channel.id);
+            saveData();
+
+            await sendTranscript(channel, channelData, closedByUsername ?? 'Unknown');
+
+            if (closedById) {
+                addStat(closedById, closedByUsername, 'closed');
+                await updateStatsBoard();
+            }
+
+            await channel.delete().catch(() => {});
+        } catch (err) {
+            console.error('Close error:', err);
+        }
+    }, 10000);
 }
 
 client.login(process.env.BOT_TOKEN);
