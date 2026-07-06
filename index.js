@@ -16,7 +16,6 @@ require('dotenv').config();
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const fs = require('fs');
 const path = require('path');
-const { ActivityType } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -275,20 +274,7 @@ const ticketQuestions = {
 
 client.once('ready', async () => {
     console.log(`Bot is ready! Logged in as ${client.user.tag}`);
-
-    client.user.setPresence({
-        status: "online",
-        activities: [
-            {
-                name: "https://nextGames.gg",
-                type: ActivityType.Playing,
-            },
-        ],
-    });
-
-    console.log("Status set!");
     console.log(`[Persistence] Ticket counter: ${ticketCounter}`);
-});
 
     // Bot yeniden başladığında kayıtlı ticket kanallarını Discord'da doğrula.
     // Discord'da artık mevcut olmayan kanalları Map'ten temizle.
