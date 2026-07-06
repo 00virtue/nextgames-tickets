@@ -545,15 +545,21 @@ async function uploadTranscript(json) {
     return data.files['transcript.json'].raw_url;
 }
 
-async function sendTranscript(channel, channelData, closedBy) {
+// FIX: Bu fonksiyon artık sadece mesajları ÇEKİYOR ve serialize ediyor.
+// GitHub'a yükleme + transcript kanalına gönderme kısmı ayrı bir fonksiyona
+// taşındı (sendTranscriptFromData) ki kanal silme işlemi bu ağ isteklerini
+// beklemek zorunda kalmasın.
+async function fetchAndSerializeChannel(channel) {
+    const rawMessages = await fetchAllMessages(channel);
+    return serializeMessages(rawMessages);
+}
+
+async function sendTranscriptFromData(channelData, channelName, serialized, closedBy) {
     if (!config.transcriptChannelId) return;
     const transcriptChannel = client.channels.cache.get(config.transcriptChannelId);
     if (!transcriptChannel) return;
 
     try {
-        const rawMessages  = await fetchAllMessages(channel);
-        const serialized   = serializeMessages(rawMessages);
-
         let openerName = channelData.userId;
         try { const u = await client.users.fetch(channelData.userId); openerName = u.username; } catch (_) {}
         let claimedByName = 'Unclaimed';
@@ -562,7 +568,7 @@ async function sendTranscript(channel, channelData, closedBy) {
         }
 
         const transcriptData = {
-            ticketNumber: channelData.number, channelName: channel.name, type: channelData.type,
+            ticketNumber: channelData.number, channelName, type: channelData.type,
             openerName, claimedByName, createdAt: channelData.createdAt ?? null,
             closedAt: new Date().toISOString(), messages: serialized
         };
@@ -571,7 +577,7 @@ async function sendTranscript(channel, channelData, closedBy) {
         const transcriptUrl = `${config.transcriptBaseUrl}?url=${encodeURIComponent(rawUrl)}`;
 
         const embed = new EmbedBuilder()
-            .setTitle(`📋 Transcript — #${channel.name}`)
+            .setTitle(`📋 Transcript — #${channelName}`)
             .setColor('#5865F2')
             .addFields(
                 { name: 'Ticket #',   value: String(channelData.number),          inline: true },
@@ -588,6 +594,17 @@ async function sendTranscript(channel, channelData, closedBy) {
         );
 
         await transcriptChannel.send({ embeds: [embed], components: [row] });
+    } catch (err) { console.error('[Transcript] Hata:', err); }
+}
+
+// convertToTicket akışında hâlâ kanal silinmeden transcript göndermemiz
+// gerekiyor (kanal başka bir kanala "taşınıyor", silme işlemi zaten
+// setTimeout ile 2 saniye sonra yapılıyor), bu yüzden bu sarmalayıcıyı
+// eski isimle bırakıyoruz.
+async function sendTranscript(channel, channelData, closedBy) {
+    try {
+        const serialized = await fetchAndSerializeChannel(channel);
+        await sendTranscriptFromData(channelData, channel.name, serialized, closedBy);
     } catch (err) { console.error('[Transcript] Hata:', err); }
 }
 
@@ -885,14 +902,36 @@ function startCloseCountdown(channel, closedByUsername, closedById) {
             tickets.delete(channel.id);
             saveData();
 
-            await sendTranscript(channel, channelData, closedByUsername ?? 'Unknown');
+            // FIX: Önceden burada `await sendTranscript(...)` çağrılıyordu, bu da
+            // kanalın silinmesini GitHub'a transcript yüklenene kadar bloke ediyordu.
+            // "10 saniyede silinecek" dediğimiz halde gerçekte 10s + mesaj çekme
+            // süresi + GitHub API süresi kadar bekleniyordu.
+            //
+            // Şimdi: mesajları kanal silinmeden önce çekiyoruz (bu zorunlu, çünkü
+            // kanal silinince mesajlara erişilemez), ama transcript'i GitHub'a
+            // yükleyip transcript kanalına gönderme işini kanalı sildikten SONRA,
+            // arka planda (await'siz) yapıyoruz. Böylece kullanıcıya söylenen 10
+            // saniye gerçek 10 saniye oluyor.
+
+            let serialized = [];
+            try {
+                serialized = await fetchAndSerializeChannel(channel);
+            } catch (err) {
+                console.error('[Transcript] Mesajlar çekilemedi:', err);
+            }
+
+            const channelName = channel.name;
+
+            await channel.delete().catch(() => {});
 
             if (closedById) {
                 addStat(closedById, closedByUsername, 'closed');
                 await updateStatsBoard();
             }
 
-            await channel.delete().catch(() => {});
+            // Arka planda çalışır, kanal silme işlemini bloklamaz.
+            sendTranscriptFromData(channelData, channelName, serialized, closedByUsername ?? 'Unknown')
+                .catch(err => console.error('[Transcript] Arka plan hatası:', err));
         } catch (err) {
             console.error('Close error:', err);
         }
