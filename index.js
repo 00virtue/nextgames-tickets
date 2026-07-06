@@ -516,7 +516,7 @@ async function uploadTranscript(json) {
             'X-GitHub-Api-Version': '2022-11-28'
         },
         body: JSON.stringify({
-            description: 'Ticket Transcript', public: true,
+            description: 'Ticket Transcript', public: false,
             files: { 'transcript.json': { content: json } }
         })
     });
