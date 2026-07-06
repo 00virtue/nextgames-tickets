@@ -289,6 +289,11 @@ client.once('ready', async () => {
     console.log(`Bot is ready! Logged in as ${client.user.tag}`);
     console.log(`[Persistence] Ticket counter: ${ticketCounter}`);
 
+    client.user.setPresence({
+        activities: [{ name: 'https://nextgames.gg', type: 0 }],
+        status: 'dnd'
+    });
+
     // Bot yeniden başladığında kayıtlı ticket kanallarını Discord'da doğrula.
     // Discord'da artık mevcut olmayan kanalları Map'ten temizle.
     if (tickets.size > 0) {
